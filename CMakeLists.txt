@@ -25,7 +25,7 @@ add_subdirectory(${PROJECT_SOURCE_DIR}/res/includes/glad)
 
 
 add_library(Display ${DISPLAY})
-add_library(Engine ${ENGINE})
+add_library(Engine ${ENGINE} Engine3D/Ray.cpp Engine3D/Ray.h)
 
 
 add_executable(${PROJ_NAME} ${GAME})
