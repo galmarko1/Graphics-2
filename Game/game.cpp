@@ -1,6 +1,7 @@
 #include "game.h"
 #include "Ray.h"
 #include <iostream>
+#include <algorithm>
 #include <glm/gtc/matrix_transform.hpp>
 
 using namespace glm;
@@ -24,25 +25,37 @@ Game::Game(float angle ,float relationWH, float near1, float far1) : Scene(angle
 { 	
 }
 
-bool hit_sphere(vec3 center, double radius, Ray r) {
+float hit_sphere(vec3 center, double radius, Ray r) {
     vec3 oc = r.origin() - center;
-    auto a = dot(r.direction(), r.direction());
-    auto b = 2.0 * dot(oc, r.direction());
-    auto c = dot(oc, oc) - radius*radius;
-    auto discriminant = b*b - 4*a*c;
-    return (discriminant > 0);
+    float a = dot(r.direction(), r.direction());
+    float b = 2.0 * dot(oc, r.direction());
+    float c = dot(oc, oc) - radius*radius;
+    float discriminant = b*b - 4*a*c;
+    if (discriminant < 0) //no hit
+        return -1;
+    return (-b -sqrt(discriminant))/(2.0 * a);
 }
 
 
 vec3 ray_color(Ray& r){
-    if(hit_sphere(vec3(128, 128, -10), 15, r)){
-        return vec3 (1.0, 0.0, 0.0);
+    vec3 center = vec3(0, 0, -1); // sphere center
+    vec3 sphere_color = vec3(1,0,0);
+    vec3 light_dir = vec3(0, 0.5, 0); // light dir
+    float diffuseK = 1;
+
+    float t = hit_sphere(center, 0.5, r);
+    if(t > 0)
+    {
+        vec3 normal = normalize(r.at(t) - center) ;
+        vec3 diffuse = (float) std::max((double) dot(normalize(light_dir), normal), 0.0) * sphere_color * diffuseK;
+        vec3 color = diffuse;
+        return color;
     }
+    //background
     vec3 unit_dir = normalize(r.direction());
-    float t = 0.5 * unit_dir[1] + 1.0;
+    t = 0.5 * unit_dir[1] + 1.0;
     float t2 = 1.0 - t;
     return t2 * vec3 (1.0,1.0,1.0) + t * vec3 (0.5, 0.7, 1.0);
-//    return vec3(255.0, 0.0, 0.0);
 }
 
 unsigned char* part1(){
@@ -51,11 +64,17 @@ unsigned char* part1(){
 //    int width = 400;
 //    int height = width/ ratio;
 
-    vec3 origin = vec3(128, 128, 10);
+    vec3 origin = vec3(0, 0, 4.0);
 
-    for(int i = 1; i <= 256; i ++){
-        for(int j = 1; j <= 256; j ++){
-            vec3 dir = vec3( i - origin[0] , j - origin[1], -10);
+    for(int i = 0; i <256 ; i ++){
+        for(int j = 0; j < 256; j ++){
+            double u = double(j)/ 255;
+            double v = double(i)/ 255;
+            vec3 xDir = vec3(2 * u,0,0);
+            vec3 yDir = vec3(0, 2 * v, 0);
+            vec3 left_corner = vec3(-1, -1, 0);
+
+            vec3 dir = left_corner + xDir + yDir - origin;
             Ray r = Ray(origin, dir);
             vec3 color = ray_color(r);
             mat[i-1][j-1][0] = color[0];

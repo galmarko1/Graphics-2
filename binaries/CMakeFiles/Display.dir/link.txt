@@ -1,0 +1,2 @@
+C:\MinGW\bin\ar.exe qc libDisplay.a CMakeFiles/Display.dir/DisplayGLFW/display.cpp.obj
+C:\MinGW\bin\ranlib.exe libDisplay.a
