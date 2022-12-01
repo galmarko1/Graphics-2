@@ -112,7 +112,7 @@ vec3 ray_color_plane(Ray &r) {
 vec3 ray_color(Ray &r) {
     vec3 center = vec3(0, 0, -1); // sphere center
     vec3 sphere_color = vec3(1, 0, 0);
-    vec3 light_dir = normalize(vec3(0, 15, -3)); // light dir
+    vec3 light_dir = normalize(vec3(0, 10, 4)); // light dir
     vec3 light_color = vec3(1, 1, 1);
     vec4 plane = vec4(0, -0.5, 0, -1);
     vec3 plane_color = vec3(0, 0, 1);
@@ -130,13 +130,29 @@ vec3 ray_color(Ray &r) {
         }
         if (t_sphere > 0) {
             vec3 normal = normalize(r.at(t_sphere) - center);
-            vec3 R = light_dir - 2 * dot(light_dir, normal) * normal;
-            float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), 256);
-            vec3 specular = vec3(0, 0, 0);
+            vec3 R = -1.0f * light_dir + 2 * dot(light_dir, normal) * normal;
+            float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), 8);
+            vec3 specular = vec3(1, 1, 1);
             specular = specularK * p * light_color;
 
             vec3 diffuse = (float) std::max((double) dot(normalize(light_dir), normal), 0.0) * sphere_color * diffuseK;
             vec3 color = diffuse + specular;
+
+//            plane_color = diffuse + specular + spot;
+//        vec3 plane_def = diffuse + specular;
+            if (color.x > 1.0f) {
+                color = vec3(1.0, color.y, color.z);
+            }
+            if (color.y > 1.0f) {
+                color = vec3(color.x, 1.0, color.z);
+            }
+            if (color.z > 1.0f) {
+                color = vec3(color.x, color.y, 1.0f);
+            }
+            return color;
+
+
+
             return color;
         }
 
