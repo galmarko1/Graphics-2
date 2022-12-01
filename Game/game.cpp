@@ -40,15 +40,22 @@ float hit_sphere(vec3 center, double radius, Ray r) {
 vec3 ray_color(Ray& r){
     vec3 center = vec3(0, 0, -1); // sphere center
     vec3 sphere_color = vec3(1,0,0);
-    vec3 light_dir = vec3(0, 0.5, 0); // light dir
+    vec3 light_dir = normalize(vec3(0, 15, -3)); // light dir
+    vec3 light_color = vec3(1, 1, 1);
     float diffuseK = 1;
+    float specularK = 0.7;
 
     float t = hit_sphere(center, 0.5, r);
     if(t > 0)
     {
         vec3 normal = normalize(r.at(t) - center) ;
+        vec3 R = light_dir - 2 * dot(light_dir, normal) * normal;
+        float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f) , 256);
+        vec3 specular = vec3 (0,0,0);
+        specular = specularK * p * light_color ;
+
         vec3 diffuse = (float) std::max((double) dot(normalize(light_dir), normal), 0.0) * sphere_color * diffuseK;
-        vec3 color = diffuse;
+        vec3 color = diffuse + specular;
         return color;
     }
     //background
