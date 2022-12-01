@@ -114,24 +114,35 @@ vec3 ray_color(Ray &r) {
     vec3 sphere_color = vec3(1, 0, 0);
     vec3 light_dir = normalize(vec3(0, 15, -3)); // light dir
     vec3 light_color = vec3(1, 1, 1);
+    vec4 plane = vec4(0, -0.5, 0, -1);
+    vec3 plane_color = vec3(0, 0, 1);
+    float t_plane = hit_plane(plane[0], plane[1], plane[2], plane[3], r);
+
     float diffuseK = 1;
     float specularK = 0.7;
 
-    float t = hit_sphere(center, 0.5, r);
-    if (t > 0) {
-        vec3 normal = normalize(r.at(t) - center);
-        vec3 R = light_dir - 2 * dot(light_dir, normal) * normal;
-        float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), 256);
-        vec3 specular = vec3(0, 0, 0);
-        specular = specularK * p * light_color;
+    float t_sphere = hit_sphere(center, 0.5, r);
+//todo change to lists
 
-        vec3 diffuse = (float) std::max((double) dot(normalize(light_dir), normal), 0.0) * sphere_color * diffuseK;
-        vec3 color = diffuse + specular;
-        return color;
-    }
+        if (t_sphere < 0 || t_sphere > t_plane) {
+            if (t_plane > 0)
+                return ray_color_plane(r);
+        }
+        if (t_sphere > 0) {
+            vec3 normal = normalize(r.at(t_sphere) - center);
+            vec3 R = light_dir - 2 * dot(light_dir, normal) * normal;
+            float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), 256);
+            vec3 specular = vec3(0, 0, 0);
+            specular = specularK * p * light_color;
+
+            vec3 diffuse = (float) std::max((double) dot(normalize(light_dir), normal), 0.0) * sphere_color * diffuseK;
+            vec3 color = diffuse + specular;
+            return color;
+        }
+
     //background
     vec3 unit_dir = normalize(r.direction());
-    t = 0.5 * unit_dir[1] + 1.0;
+    float t = 0.5 * unit_dir[1] + 1.0;
     float t2 = 1.0 - t;
     return t2 * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
 }
@@ -154,8 +165,8 @@ unsigned char *part1() {
 
             vec3 dir = left_corner + xDir + yDir - origin;
             Ray r = Ray(origin, dir);
-//            vec3 color = ray_color(r);
-            vec3 color = ray_color_plane(r);
+            vec3 color = ray_color(r);
+//            vec3 color = ray_color_plane(r);
             mat[y][x][0] = color[0];
             mat[y][x][1] = color[1];
             mat[y][x][2] = color[2];
