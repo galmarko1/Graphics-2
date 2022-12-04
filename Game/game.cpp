@@ -6,6 +6,20 @@
 
 using namespace glm;
 
+std::vector<glm::vec4> spheres;
+std::vector<glm::vec3> spheres_colors;
+
+std::vector<glm::vec4> planes;
+std::vector<glm::vec3> planes_colors;
+
+std::vector<glm::vec3> directional_dirs;
+std::vector<glm::vec3> spotLights_dirs;
+std::vector<glm::vec3> spotLights_positions;
+std::vector<glm::vec3> spotLights_intensity;
+std::vector<glm::vec3> directional_intensity;
+std::vector<float> ambient;
+
+
 static void printMat(const glm::mat4 mat) {
     std::cout << " matrix:" << std::endl;
     for (int i = 0; i < 4; i++) {
@@ -16,6 +30,7 @@ static void printMat(const glm::mat4 mat) {
 }
 
 Game::Game() : Scene() {
+
 }
 
 Game::Game(float angle, float relationWH, float near1, float far1) : Scene(angle, relationWH, near1, far1) {
@@ -34,13 +49,6 @@ float hit_sphere(vec3 center, double radius, Ray r) {
 
 
 float hit_plane(float a, float b, float c, float d, Ray r) {
-//    vec3 normal = normalize(vec3(a, b, c));
-//    if (dot(normal, r.direction()) > 0) {
-//        return -1.0f * (dot(normal, r.origin()) + d) / dot(normal, r.direction());
-//    }
-//    return -1;
-//
-
     vec3 normal = normalize(vec3(a, b, c));
     vec3 center = vec3(0, -1, 0);
     float denominator = dot(normal, r.direction());
@@ -89,6 +97,9 @@ vec3 ray_color_plane(Ray &r) {
         vec3 diffuse = (float) std::max((double) dot(normalize(light_dir), normal), 0.0) * plane_color * diffuseK;
 //        diffuse = vec3(0,0,0);
         plane_color = diffuse + specular + spot;
+
+//        plane_color = diffuse + specular;
+
 //        vec3 plane_def = diffuse + specular;
         if (plane_color.x > 1.0f) {
             plane_color = vec3(1.0, plane_color.y, plane_color.z);
@@ -108,68 +119,130 @@ vec3 ray_color_plane(Ray &r) {
     return t2 * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
 }
 
+std::pair<int, int> minHit(Ray &r) {
+    float min_t_sphere = 100000;
+    float min_t_plane = 100000;
+    int min_sphere_index = -1;
+    int min_plane_index = -1;
+    int i = 0;
 
-vec3 ray_color(Ray &r) {
-    vec3 center = vec3(0, 0, -1); // sphere center
-    vec3 sphere_color = vec3(1, 0, 0);
-    vec3 light_dir = normalize(vec3(0, 10, 4)); // light dir
-    vec3 light_color = vec3(1, 1, 1);
-    vec4 plane = vec4(0, -0.5, 0, -1);
-    vec3 plane_color = vec3(0, 0, 1);
-    float t_plane = hit_plane(plane[0], plane[1], plane[2], plane[3], r);
-
-    float diffuseK = 1;
-    float specularK = 0.7;
-
-    float t_sphere = hit_sphere(center, 0.5, r);
-//todo change to lists
-
-        if (t_sphere < 0 || t_sphere > t_plane) {
-            if (t_plane > 0)
-                return ray_color_plane(r);
+    for (vec4 sphere: spheres) {
+        float curr_t = hit_sphere(vec3(sphere.x, sphere.y, sphere.z), sphere.w, r);
+        if (curr_t > -1) {
+            if (min_t_sphere > curr_t) {
+                min_sphere_index = i;
+                min_t_sphere = curr_t;
+            }
         }
-        if (t_sphere > 0) {
-            vec3 normal = normalize(r.at(t_sphere) - center);
-            vec3 R = -1.0f * light_dir + 2 * dot(light_dir, normal) * normal;
-            float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), 8);
-            vec3 specular = vec3(1, 1, 1);
-            specular = specularK * p * light_color;
+        i++;
+    }
 
-            vec3 diffuse = (float) std::max((double) dot(normalize(light_dir), normal), 0.0) * sphere_color * diffuseK;
-            vec3 color = diffuse + specular;
-
-//            plane_color = diffuse + specular + spot;
-//        vec3 plane_def = diffuse + specular;
-            if (color.x > 1.0f) {
-                color = vec3(1.0, color.y, color.z);
+    i = 0;
+    for (vec4 plane: planes) {
+        float curr_t = hit_plane(plane.x, plane.y, plane.z, plane.w, r);
+        if (curr_t > -1) {
+            if (min_t_plane > curr_t) {
+                min_plane_index = i;
+                min_t_plane = curr_t;
             }
-            if (color.y > 1.0f) {
-                color = vec3(color.x, 1.0, color.z);
-            }
-            if (color.z > 1.0f) {
-                color = vec3(color.x, color.y, 1.0f);
-            }
-            return color;
-
-
-
-            return color;
         }
-
-    //background
-    vec3 unit_dir = normalize(r.direction());
-    float t = 0.5 * unit_dir[1] + 1.0;
-    float t2 = 1.0 - t;
-    return t2 * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
+        i++;
+    }
+    std::pair<int, int> p;
+    if (min_plane_index == -1 && min_sphere_index == -1) {
+        p.first = -1;
+        p.second = 0;
+    } else if (min_t_plane < min_t_sphere) {
+        p.first = min_plane_index;
+        p.second = 2; // plane vector
+    } else {
+        p.first = min_sphere_index;
+        p.second = 1; // sphere vector
+    }
+    return p;
 }
 
-unsigned char *part1() {
-    float mat[256][256][3];
-//    float ratio = 16.0/9.0;
-//    int width = 400;
-//    int height = width/ ratio;
+vec3 ray_color(Ray &r) {
+    float diffuseK = 1;
+    float specularK = 0.7;
+    float spot_factor = 1.0;
 
+    vec3 spot_light_dir = normalize(vec3(0, -1, 0)); // spotlight dir
+    vec3 spot_light_color = vec3(1, 1, 1); // spotlight
+    vec3 spot_light_origin = vec3(0, 1.5, -1); // spotlight
+    vec3 light_dir = normalize(vec3(0, 10, 4)); // light dir
+    vec3 light_color = vec3(1, 1, 1);
+
+    vec3 center = vec3(0, 0, -1); // sphere center
+    vec3 sphere_color = vec3(1, 0, 0);
+    vec3 plane_color = vec3(0, 0, 1);
+
+
+//    return vec3(1,0,0);
+    std::pair<int, int> hit = minHit(r);
+    if (hit.first == -1) { //background
+        vec3 unit_dir = normalize(r.direction());
+        float t = 0.5 * unit_dir[1] + 1.0;
+        float t2 = 1.0 - t;
+        return t2 * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
+    }
+    if (hit.second == 1) { //sphere
+//        return vec3(1,1,1);
+        vec3 sphere_center = vec3(spheres[hit.first].x, spheres[hit.first].y, spheres[hit.first].z);
+        float t_sphere = hit_sphere(sphere_center, spheres[hit.first].w, r);
+
+        vec3 normal = normalize(r.at(t_sphere) - center);
+        vec3 R = -1.0f * light_dir + 2 * dot(light_dir, normal) * normal;
+        float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), 8);
+
+        vec3 specular = vec3(1, 1, 1);
+        specular = specularK * p * light_color;
+
+        vec3 diffuse = (float) std::max((double) dot(normalize(light_dir), normal), 0.0) * sphere_color * diffuseK;
+
+        vec3 L = normalize(spot_light_dir);
+        vec3 raySphereIntersection = r.at(t_sphere);
+        vec3 D = normalize(raySphereIntersection - spot_light_origin);
+        float spotCosine = dot(L, D);
+        if (spotCosine >= 0.6) { // ?
+            spot_factor = pow(spotCosine, 64);//?
+        } else {
+            spot_factor = 0.0;
+        }
+        vec3 spot = spot_factor * vec3(1, 1, 1);
+
+        vec3 color = diffuse + specular + spot;
+
+        if (color.x > 1.0f) {
+            color = vec3(1.0, color.y, color.z);
+        }
+        if (color.y > 1.0f) {
+            color = vec3(color.x, 1.0, color.z);
+        }
+        if (color.z > 1.0f) {
+            color = vec3(color.x, color.y, 1.0f);
+        }
+        return color;
+
+
+    } else { //plane
+//        return vec3(0,0,0);
+        return ray_color_plane(r);
+    }
+}
+
+
+unsigned char *part1() {
+    vec3 center = vec3(0, 0, -1); // sphere center
+    vec3 sphere_color = vec3(1, 0, 0);
+    vec3 plane_color = vec3(0, 0, 1);
+
+    float mat[256][256][3];
     vec3 origin = vec3(0, 0, 4.0);
+    spheres.push_back(vec4(center.x, center.y, center.z, 0.5));
+    planes.push_back(vec4(0, -0.5, 0, -1));
+    spheres_colors.push_back(sphere_color);
+    planes_colors.push_back(plane_color);
 
     for (int y = 0; y < 256; y++) {
         for (int x = 0; x < 256; x++) {
