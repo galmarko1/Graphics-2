@@ -17,8 +17,8 @@ class Ray {
         glm::vec3 origin() {return orig;}
         glm::vec3 direction() {return dir;}
         glm::vec3 at (float t) {
-            glm::vec3 vec_t = glm::vec3(t,t,t);
-            return orig + vec_t * dir;
+//            glm::vec3 vec_t = glm::vec3(t,t,t);
+            return orig + t * dir;
         }
     public:
     glm::vec3 orig;

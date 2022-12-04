@@ -62,26 +62,93 @@ float hit_plane(float a, float b, float c, float d, Ray r) {
     return -1;
 }
 
-vec3 ray_color_plane(Ray &r) {
-    vec4 plane = vec4(0, -0.5, 0, -1);
-    vec3 plane_color = vec3(0, 0, 1);
-    vec3 light_dir = normalize(vec3(0, -1, 0)); // light dir
-    vec3 light_color = vec3(1, 1, 1);
+vec3 ray_color_plane(Ray &r, int index) {
+//    vec4 plane = planes[index];
+//    vec3 plane_color = planes_colors[index];
+//    vec3 light_dir = normalize(vec3(0, -1, 0)); // light dir
+//    vec3 light_color = vec3(1, 1, 1);
+//    vec3 spot_light_dir = normalize(vec3(0, -1, 0)); // spotlight dir
+//    vec3 spot_light_color = vec3(1, 1, 1); // spotlight
+//    vec3 spot_light_origin = vec3(0, 1, -5); // spotlight
+//    float diffuseK = 1;
+//    float specularK = 0.7;
+//    float w = 1.0;
+//    float spot_factor = 1.0;
+//    float t = hit_plane(plane[0], plane[1], plane[2], plane[3], r);
+//    if (t > 0) {
+//        vec3 normal = normalize(vec3(plane[0], plane[1], plane[2]));
+//        vec3 sum_lights = vec3(0,0,0);
+//        for(int i = 0; i < directional_dirs.size(); i++) {
+//            vec3 light_dir = directional_dirs[i];
+//            vec3 light_color = directional_intensity[i];
+//
+//            vec3 R = light_dir - 2 * dot(light_dir, normal) * normal;
+//            float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), 256);
+//            vec3 specular = vec3(0, 0, 0);
+//            specular = specularK * p * light_color;
+//            vec3 diffuse = (float) std::max((double) dot(normalize(light_dir), normal), 0.0) * plane_color * diffuseK;
+//            sum_lights += (diffuse + specular);
+//        }
+//        for(int i =0; i < spotLights_dirs.size(); i++) {
+//            vec3 spot_light_dir = spotLights_dirs[i];
+//            vec3 spot_light_origin = spotLights_positions[i];
+//            vec3 L = normalize(spot_light_dir);
+//            vec3 D = normalize(r.at(t) - spot_light_origin);
+//            float spotCosine = dot(D, L);
+//            if (spotCosine >= 0.6) { // ?
+//                spot_factor = pow(spotCosine, 5);//?
+//            } else {
+//                spot_factor = 0.0;
+//            }
+//            vec3 spot = spot_factor * vec3(1, 1, 1);
+//            sum_lights += spot;
+//        }
+////        diffuse = vec3(0,0,0);
+//        plane_color = sum_lights;
+//
+//        if (plane_color.x > 1.0f) {
+//            plane_color = vec3(1.0, plane_color.y, plane_color.z);
+//        }
+//        if (plane_color.y > 1.0f) {
+//            plane_color = vec3(plane_color.x, 1.0, plane_color.z);
+//        }
+//        if (plane_color.z > 1.0f) {
+//            plane_color = vec3(plane_color.x, plane_color.y, 1.0f);
+//        }
+//        return plane_color;
+//    }
+//    //background
+//    vec3 unit_dir = normalize(r.direction());
+//    t = 0.5 * unit_dir[1] + 1.0;
+//    float t2 = 1.0 - t;
+//    return t2 * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
+//}
+    vec4 plane = planes[index];
+    vec3 plane_color = planes_colors[index];
+//    vec3 light_dir = normalize(vec3(0, -1, 0)); // light dir
+//    vec3 light_color = vec3(1, 1, 1);
     vec3 spot_light_dir = normalize(vec3(0, -1, 0)); // spotlight dir
     vec3 spot_light_color = vec3(1, 1, 1); // spotlight
     vec3 spot_light_origin = vec3(0, 1, -5); // spotlight
     float diffuseK = 1;
     float specularK = 0.7;
-    float w = 1.0;
     float spot_factor = 1.0;
     float t = hit_plane(plane[0], plane[1], plane[2], plane[3], r);
     if (t > 0) {
         vec3 normal = normalize(vec3(plane[0], plane[1], plane[2]));
-        vec3 R = light_dir - 2 * dot(light_dir, normal) * normal;
-        float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), 256);
-        vec3 specular = vec3(0, 0, 0);
-        specular = specularK * p * light_color;
-
+        vec3 sum_lights = vec3(0, 0, 0);
+        vec3 diffuse_and_specular = vec3(0, 0, 0);
+        for (int i = 0; i < directional_dirs.size(); i++) {
+            vec3 light_dir = directional_dirs[i];
+            vec3 light_color = directional_intensity[i];
+            vec3 normal = normalize(vec3(plane[0], plane[1], plane[2]));
+            vec3 R = light_dir - 2 * dot(light_dir, normal) * normal;
+            float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), 256);
+            vec3 specular = vec3(0, 0, 0);
+            specular = specularK * p * light_color;
+            vec3 diffuse = (float) std::max((double) dot(normalize(light_dir), normal), 0.0) * plane_color * diffuseK;
+            diffuse_and_specular += diffuse + specular;
+        }
         vec3 L = normalize(spot_light_dir);
         vec3 D = normalize(r.at(t) - spot_light_origin);
         float spotCosine = dot(D, L);
@@ -92,11 +159,9 @@ vec3 ray_color_plane(Ray &r) {
         } else {
             spot_factor = 0.0;
         }
-
         vec3 spot = spot_factor * vec3(1, 1, 1);
-        vec3 diffuse = (float) std::max((double) dot(normalize(light_dir), normal), 0.0) * plane_color * diffuseK;
 //        diffuse = vec3(0,0,0);
-        plane_color = diffuse + specular + spot;
+        plane_color = diffuse_and_specular + spot;
 
 //        plane_color = diffuse + specular;
 
@@ -167,15 +232,15 @@ vec3 ray_color(Ray &r) {
     float specularK = 0.7;
     float spot_factor = 1.0;
 
-    vec3 spot_light_dir = normalize(vec3(0, -1, 0)); // spotlight dir
-    vec3 spot_light_color = vec3(1, 1, 1); // spotlight
-    vec3 spot_light_origin = vec3(0, 1.5, -1); // spotlight
-    vec3 light_dir = normalize(vec3(0, 10, 4)); // light dir
-    vec3 light_color = vec3(1, 1, 1);
+//    vec3 spot_light_dir = normalize(vec3(0, -1, 0)); // spotlight dir
+//    vec3 spot_light_color = vec3(1, 1, 1); // spotlight
+//    vec3 spot_light_origin = vec3(0, 1.5, -1); // spotlight
+//    vec3 light_dir = normalize(vec3(0, 10, 4)); // light dir
+//    vec3 light_color = vec3(1, 1, 1);
 
-    vec3 center = vec3(0, 0, -1); // sphere center
-    vec3 sphere_color = vec3(1, 0, 0);
-    vec3 plane_color = vec3(0, 0, 1);
+//    vec3 center = vec3(0, 0, -1); // sphere center
+//    vec3 sphere_color = vec3(1, 0, 0);
+//    vec3 plane_color = vec3(0, 0, 1);
 
 
 //    return vec3(1,0,0);
@@ -187,31 +252,43 @@ vec3 ray_color(Ray &r) {
         return t2 * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
     }
     if (hit.second == 1) { //sphere
-//        return vec3(1,1,1);
         vec3 sphere_center = vec3(spheres[hit.first].x, spheres[hit.first].y, spheres[hit.first].z);
         float t_sphere = hit_sphere(sphere_center, spheres[hit.first].w, r);
+//        return vec3(1,1,1);
+        vec3 sum_lights = vec3(0, 0, 0);
+        for (int i = 0; i < directional_dirs.size(); i++) {
+            vec3 light_dir = directional_dirs[i];
+            vec3 light_color = directional_intensity[i];
 
-        vec3 normal = normalize(r.at(t_sphere) - center);
-        vec3 R = -1.0f * light_dir + 2 * dot(light_dir, normal) * normal;
-        float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), 8);
+            vec3 normal = normalize(r.at(t_sphere) - sphere_center);
+            vec3 R = 1.0f * light_dir - 2 * dot(light_dir, normal) * normal;
+            float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), 8);
 
-        vec3 specular = vec3(1, 1, 1);
-        specular = specularK * p * light_color;
-
-        vec3 diffuse = (float) std::max((double) dot(normalize(light_dir), normal), 0.0) * sphere_color * diffuseK;
-
-        vec3 L = normalize(spot_light_dir);
-        vec3 raySphereIntersection = r.at(t_sphere);
-        vec3 D = normalize(raySphereIntersection - spot_light_origin);
-        float spotCosine = dot(L, D);
-        if (spotCosine >= 0.6) { // ?
-            spot_factor = pow(spotCosine, 64);//?
-        } else {
-            spot_factor = 0.0;
+            vec3 specular = vec3(1, 1, 1);
+            specular = specularK * p * light_color;
+            vec3 sphere_color = spheres_colors[hit.first];
+            vec3 diffuse = (float) std::max((double) dot(normalize(-light_dir), normal), 0.0) * sphere_color * light_color* diffuseK;
+            sum_lights += (diffuse + specular);
         }
-        vec3 spot = spot_factor * vec3(1, 1, 1);
 
-        vec3 color = diffuse + specular + spot;
+        for (int i = 0; i < spotLights_dirs.size(); i++) {
+            vec3 light_color = spotLights_intensity[i];
+
+            vec3 spot_light_dir = spotLights_dirs[i];
+            vec3 spot_light_origin = spotLights_positions[i];
+            vec3 L = normalize(spot_light_dir);
+            vec3 raySphereIntersection = r.at(t_sphere);
+            vec3 D = normalize(raySphereIntersection - spot_light_origin);
+            float spotCosine = dot(L, D);
+            if (spotCosine >= 0.6) { // ?
+                spot_factor = pow(spotCosine, 64);//?
+            } else {
+                spot_factor = 0.0;
+            }
+            vec3 spot = spot_factor * vec3(1, 1, 1) * light_color;
+            sum_lights += spot;
+        }
+        vec3 color = sum_lights;
 
         if (color.x > 1.0f) {
             color = vec3(1.0, color.y, color.z);
@@ -227,22 +304,41 @@ vec3 ray_color(Ray &r) {
 
     } else { //plane
 //        return vec3(0,0,0);
-        return ray_color_plane(r);
+        return ray_color_plane(r, hit.first);
     }
 }
 
 
 unsigned char *part1() {
-    vec3 center = vec3(0, 0, -1); // sphere center
+    vec3 center = vec3(-0.7, -0.7, -2.0); // sphere center
+    vec3 center2 = vec3(0.6, -0.5, -1.0); // sphere2 center
     vec3 sphere_color = vec3(1, 0, 0);
-    vec3 plane_color = vec3(0, 0, 1);
+    vec3 plane_color = vec3(0, 1, 1);
 
     float mat[256][256][3];
-    vec3 origin = vec3(0, 0, 4.0);
+    vec3 origin = vec3(0.0, 0.0, 4.0);
     spheres.push_back(vec4(center.x, center.y, center.z, 0.5));
-    planes.push_back(vec4(0, -0.5, 0, -1));
+    spheres.push_back(vec4(center2.x, center2.y, center2.z, 0.5));
+//    planes.push_back(vec4(0, -0.5, -3.0, -3.5));
     spheres_colors.push_back(sphere_color);
     planes_colors.push_back(plane_color);
+
+//    vec3 spot_light_dir = normalize(vec3(0,-1,0)); // spotlight dir
+    vec3 spot_light_dir = normalize(vec3(0.5, 0, -1)); // spotlight dir
+    vec3 spot_light_color = vec3(0.2, 0.5, 0.7); // spotlight
+//    vec3 spot_light_origin = vec3(-0.7, 1.7, -2); // spotlight
+    vec3 spot_light_origin = vec3(2.0, 1.0, 3.0); // spotlight
+    vec3 light_dir = normalize(vec3(0, 0.5, -1)); // light dir
+//    vec3 light_dir_2 = normalize(vec3(0, 10, 4)); // light dir
+    vec3 light_color = vec3(0.7, 0.5, 0.0);
+
+    spotLights_dirs.push_back(spot_light_dir);
+    spotLights_intensity.push_back(spot_light_color);
+    spotLights_positions.push_back(spot_light_origin);
+    directional_dirs.push_back(light_dir);
+//    directional_dirs.push_back(light_dir_2);
+//    directional_intensity.push_back(light_color);
+    directional_intensity.push_back(light_color);
 
     for (int y = 0; y < 256; y++) {
         for (int x = 0; x < 256; x++) {
