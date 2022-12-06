@@ -6,11 +6,20 @@
 
 using namespace glm;
 
+
+enum MaterialType
+{
+    Normal, Reflective, Transparent
+};
+
+// TODO combine all vectors to Vector<Sphere>
 std::vector<glm::vec4> spheres;
 std::vector<glm::vec3> spheres_colors;
+std::vector<MaterialType> spheres_materials;
 
 std::vector<glm::vec4> planes;
 std::vector<glm::vec3> planes_colors;
+std::vector<MaterialType> planes_materials;
 
 std::vector<glm::vec3> directional_dirs;
 std::vector<glm::vec3> spotLights_dirs;
@@ -18,7 +27,6 @@ std::vector<glm::vec3> spotLights_positions;
 std::vector<glm::vec3> spotLights_intensity;
 std::vector<glm::vec3> directional_intensity;
 glm::vec3 ambient;
-
 
 static void printMat(const glm::mat4 mat) {
     std::cout << " matrix:" << std::endl;
@@ -198,10 +206,15 @@ vec3 ray_color_plane(Ray &r, int index) {
     return t2 * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
 }
 
-vec3 ray_color(Ray &r) {
+vec3 ray_color(Ray &r, int depth = 1) {
+
+    // maximum recursion
+    if (depth == 0) {
+        return vec3(0,0,0);
+    }
+
     float diffuseK = 1;
     float specularK = 0.7;
-    float spot_factor = 1.0;
     std::pair<int, int> hit = minHit(r, -1, -1);
 
     if (hit.first == -1) { //background
@@ -213,12 +226,12 @@ vec3 ray_color(Ray &r) {
     if (hit.second == 1) { //sphere
         vec3 sphere_center = vec3(spheres[hit.first].x, spheres[hit.first].y, spheres[hit.first].z);
         float t_sphere = hit_sphere(sphere_center, spheres[hit.first].w, r);
+        vec3 normal = normalize(r.at(t_sphere) - sphere_center);
+
         vec3 sum_lights = ambient * spheres_colors[hit.first];
         for (int i = 0; i < directional_dirs.size(); i++) {
             vec3 light_dir = directional_dirs[i];
             vec3 light_color = directional_intensity[i];
-
-            vec3 normal = normalize(r.at(t_sphere) - sphere_center);
             vec3 R = 1.0f * light_dir - 2 * dot(light_dir, normal) * normal;
             float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), 8);
 
@@ -263,6 +276,13 @@ vec3 ray_color(Ray &r) {
         if (color.z > 1.0f) {
             color = vec3(color.x, color.y, 1.0f);
         }
+
+        if (spheres_materials[hit.first] == Reflective)
+        {
+            Ray reflect_ray = Ray(r.at(t_sphere), -r.direction() + 2 * dot(r.direction(), normal) * normal);
+            color += specularK * ray_color(reflect_ray, depth-1);
+        }
+
         return color;
 
 
@@ -274,8 +294,14 @@ vec3 ray_color(Ray &r) {
 
 
 unsigned char *part1() {
-    vec3 center = vec3(-0.7, -0.7, -2.0); // sphere center
-    vec3 center2 = vec3(0.6, -0.5, -1.0); // sphere2 center
+    // PDF Test scene
+//    vec3 center = vec3(-0.7, -0.7, -2.0); // sphere center
+//    vec3 center2 = vec3(0.6, -0.5, -1.0); // sphere2 center
+
+    // Mirrors test scene
+    vec3 center = vec3(-0.4, 0, -1.0); // sphere center
+    vec3 center2 = vec3(0.7, 0, -1.0); // sphere2 center
+
     vec3 sphere_color = vec3(1, 0, 0);
     vec3 sphere_color_2 = vec3(0.6, 0.0, 0.8);
     vec3 plane_color = vec3(0, 1, 1);
@@ -287,8 +313,11 @@ unsigned char *part1() {
     spheres.push_back(vec4(center2.x, center2.y, center2.z, 0.5));
     planes.push_back(vec4(0, -0.5, -1.0, -3.5));
     spheres_colors.push_back(sphere_color);
+    spheres_materials.push_back(Normal);
     planes_colors.push_back(plane_color);
+    planes_materials.push_back(Normal);
     spheres_colors.push_back(sphere_color_2);
+    spheres_materials.push_back(Reflective);
 
     vec3 spot_light_dir = normalize(vec3(0.5, 0, -1)); // spotlight dir
     vec3 spot_light_color = vec3(0.2, 0.5, 0.7); // spotlight
@@ -296,9 +325,9 @@ unsigned char *part1() {
     vec3 light_dir = normalize(vec3(0, 0.5, -1)); // light dir
     vec3 light_color = vec3(0.7, 0.5, 0.0);
 
-    spotLights_dirs.push_back(spot_light_dir);
-    spotLights_intensity.push_back(spot_light_color);
-    spotLights_positions.push_back(spot_light_origin);
+//    spotLights_dirs.push_back(spot_light_dir);
+//    spotLights_intensity.push_back(spot_light_color);
+//    spotLights_positions.push_back(spot_light_origin);
     directional_dirs.push_back(light_dir);
     directional_intensity.push_back(light_color);
 
@@ -312,7 +341,7 @@ unsigned char *part1() {
 
             vec3 dir = left_corner + xDir + yDir - origin;
             Ray r = Ray(origin, dir);
-            vec3 color = ray_color(r);
+            vec3 color = ray_color(r, 4);
 //            vec3 color = ray_color_plane(r);
             mat[y][x][0] = color[0];
             mat[y][x][1] = color[1];
