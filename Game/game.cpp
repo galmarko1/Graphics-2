@@ -313,13 +313,13 @@ unsigned char *part1() {
     vec3 center = vec3(-0.7, -0.7, -2.0); // sphere center
     vec3 center2 = vec3(0.6, -0.5, -1.0); // sphere2 center
     vec3 sphere_color = vec3(1, 0, 0);
-    vec3 plane_color = vec3(0, 1, 1);
+    vec3 plane_color = vec3(1, 0, 1);
 
     float mat[256][256][3];
     vec3 origin = vec3(0.0, 0.0, 4.0);
     spheres.push_back(vec4(center.x, center.y, center.z, 0.5));
     spheres.push_back(vec4(center2.x, center2.y, center2.z, 0.5));
-//    planes.push_back(vec4(0, -0.5, -3.0, -3.5));
+    planes.push_back(vec4(0, -0.5, -3.0, -3.5));
     spheres_colors.push_back(sphere_color);
     planes_colors.push_back(plane_color);
 
