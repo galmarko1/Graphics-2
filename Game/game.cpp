@@ -125,24 +125,19 @@ vec3 ray_color_plane(Ray &r, int index) {
 
     if (t > 0) {
         vec3 normal = normalize(vec3(plane[0], plane[1], plane[2]));
-        vec3 sum_lights = ambient;
+        vec3 sum_lights = ambient * plane_color;
         vec3 diffuse_and_specular = vec3(0, 0, 0);
         vec3 coordinate = r.at(t);
-//        if((int(coordinate.x) + int(coordinate.y ) % 2 == 0){
-//            diffuseK = 0.5;
-//        }
-
         float chess = floor(coordinate.x * 1.5) + floor(coordinate.y * 1.5);
         chess = 2 * ((chess * 0.5) - int(chess * 0.5));
         diffuseK = chess == 0 ? 1 : 0.5;
         for (int i = 0; i < directional_dirs.size(); i++) {
-            continue;
+//            continue;
             vec3 light_dir = directional_dirs[i];
             Ray ray = Ray(coordinate, -1.0f * light_dir);
             std::pair<int, int> hit = minHit(ray, 2, index);
             if (hit.second == 1) {
                 sum_lights += vec3(0, 0, 0);
-//                return vec3(0, 0, 0);
                 continue;
             }
             vec3 light_color = directional_intensity[i];
@@ -151,56 +146,34 @@ vec3 ray_color_plane(Ray &r, int index) {
             float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), 256);
             vec3 specular = vec3(0, 0, 0);
             specular = specularK * p * light_color;
-            vec3 diffuse = (float) std::max((double) dot(normalize(light_dir), normal), 0.0) * plane_color * diffuseK;
+            vec3 diffuse = (float) std::max((double) dot(normalize(light_dir), normal), 0.0)  * plane_color * light_color * diffuseK;
             diffuse_and_specular += diffuse + specular;
             sum_lights += diffuse_and_specular;
         }
         for (int i = 0; i < spotLights_dirs.size(); i++) {
-            continue;
             vec3 spot_light_dir = spotLights_positions[i] - coordinate ; // spotlight dir
             Ray ray = Ray(coordinate,  spot_light_dir);
             std::pair<int, int> hit = minHit(ray, 2, index);
             if (hit.second == 1) {
                 sum_lights += vec3(0, 0, 0);
-//                return vec3(0,x 0, 0);
                 continue;
             }
             vec3 spot_light_color = spotLights_intensity[i]; // spotlight
             vec3 spot_light_origin = spotLights_positions[i]; // spotlight
             vec3 L = normalize(spotLights_dirs[i]);
-//            vec3 D = normalize(spot_light_dir);
+
             vec3 D = normalize(r.at(t) - spot_light_origin);
             float spotCosine = dot(D, L);
-//            if (spotCosine >= 0.6) {
-////                spot_factor = pow(spotCosine, 1);
-////                vec3 spot = spot_factor * light_color;
-//                vec3 normal = normalize(r.at(t_sphere) - sphere_center);
-//                float diff = (dot(normal, spot_light_dir));
-////                vec3 product = vec3(light_color.x + spheres_colors[i].x, light_color.y + spheres_colors[i].y,
-////                                    light_color.z + spheres_colors[i].z);
-//                vec3 diffuse = light_color * diff * diffuseK;
-//                sum_lights += diffuse;
-//
-//                vec3 R = -1.0f * spot_light_dir - 2 * dot(-1.0f * spot_light_dir, normal) * normal;
-//                float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), 8);
-//
-//                vec3 specular = vec3(1, 1, 1);
-//                specular = specularK * p * light_color;
-//                sum_lights += specular;
-//            }
-//
+
             if (spotCosine  >= 0.6) { // ?
-//                vec3 spot = spot_factor * vec3(1, 1, 1);
-//            sum_lights += spot;
                 vec3 light_color = spotLights_intensity[i];
                 vec3 normal = normalize(vec3(plane[0], plane[1], plane[2]));
                 vec3 R = 1.0f * spot_light_dir - 2 * dot(-1.0f * spot_light_dir, normal) * normal;//?
                 float p = pow(max(dot(normalize(1.0f * r.direction()), normalize(R)), 0.0f), 8);
                 vec3 specular = vec3(0, 0, 0);
                 specular = specularK * p * light_color;
-                vec3 diffuse =spot_light_color * (float) std::max((double) dot(normalize(-1.0f*spot_light_dir), normal), 0.0) *
+                vec3 diffuse =spot_light_color * plane_color * (float) std::max((double) dot(normalize(-1.0f*spot_light_dir), normal), 0.0) *
                                diffuseK;
-//            diffuse_and_specular += diffuse + specular;
                 sum_lights += specular + diffuse;
             }
         }
@@ -240,7 +213,7 @@ vec3 ray_color(Ray &r) {
     if (hit.second == 1) { //sphere
         vec3 sphere_center = vec3(spheres[hit.first].x, spheres[hit.first].y, spheres[hit.first].z);
         float t_sphere = hit_sphere(sphere_center, spheres[hit.first].w, r);
-        vec3 sum_lights = ambient;
+        vec3 sum_lights = ambient * spheres_colors[hit.first];
         for (int i = 0; i < directional_dirs.size(); i++) {
             vec3 light_dir = directional_dirs[i];
             vec3 light_color = directional_intensity[i];
@@ -266,13 +239,9 @@ vec3 ray_color(Ray &r) {
             float spotCosine = -1.0f * dot(L, spot_light_dir);
 
             if (spotCosine >= 0.6) {
-//                spot_factor = pow(spotCosine, 1);
-//                vec3 spot = spot_factor * light_color;
                 vec3 normal = normalize(r.at(t_sphere) - sphere_center);
                 float diff = (dot(normal, spot_light_dir));
-//                vec3 product = vec3(light_color.x + spheres_colors[i].x, light_color.y + spheres_colors[i].y,
-//                                    light_color.z + spheres_colors[i].z);
-                vec3 diffuse = light_color * diff * diffuseK;
+                vec3 diffuse = light_color * diff * diffuseK * spheres_colors[hit.first];
                 sum_lights += diffuse;
 
                 vec3 R = -1.0f * spot_light_dir - 2 * dot(-1.0f * spot_light_dir, normal) * normal;
