@@ -332,18 +332,18 @@ unsigned char *part1() {
     spheres_colors.push_back(sphere_color);
     spheres_materials.push_back(Normal);
     planes_colors.push_back(plane_color);
-    planes_materials.push_back(Reflective);
+    planes_materials.push_back(Normal);
     spheres_colors.push_back(sphere_color_2);
-    spheres_materials.push_back(Normal);
+    spheres_materials.push_back(Reflective);
     spheres_colors.push_back(sphere_color_3);
-    spheres_materials.push_back(Normal);
+    spheres_materials.push_back(Reflective);
 
 
     vec3 spot_light_dir = normalize(vec3(0.5, 0, -1)); // spotlight dir
     vec3 spot_light_color = vec3(0.2, 0.5, 0.7); // spotlight
     vec3 spot_light_origin = vec3(2.0, 1.0, 3.0); // spotlight
-//    vec3 light_dir = normalize(vec3(0, 0.5, -1)); // light dir
-    vec3 light_dir = normalize(normalize(1.0f * vec3(0, -0.5, -1.0))); // light dir
+    vec3 light_dir = normalize(vec3(0, 0.5, -1)); // light dir
+//    vec3 light_dir = normalize(normalize(1.0f * vec3(0, -0.5, -1.0))); // light dir
     vec3 light_color = vec3(0.7, 0.5, 0.0);
 
 //    spotLights_dirs.push_back(spot_light_dir);
