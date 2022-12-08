@@ -3,6 +3,7 @@
 #include <iostream>
 #include <algorithm>
 #include <glm/gtc/matrix_transform.hpp>
+#include <random>
 
 using namespace glm;
 
@@ -29,6 +30,8 @@ std::vector<glm::vec3> spotLights_intensity;
 std::vector<glm::vec3> directional_intensity;
 glm::vec3 ambient;
 
+int samples_per_pixel;
+
 static void printMat(const glm::mat4 mat) {
     std::cout << " matrix:" << std::endl;
     for (int i = 0; i < 4; i++) {
@@ -45,13 +48,29 @@ Game::Game() : Scene() {
 Game::Game(float angle, float relationWH, float near1, float far1) : Scene(angle, relationWH, near1, far1) {
 }
 
+inline double random_double() {
+    static std::uniform_real_distribution<double> distribution(0.0, 1.0);
+    static std::mt19937 generator;
+    return distribution(generator);
+}
+
 vec3 ray_color(Ray &r, int depth , int planeOrSphere, int objectIndex) ;// forward deceleration
 
 vec3 refract(vec3 ray, vec3 normal, float refract_ratio) {
     float cos_theta = min(dot(-ray, normal), 1.0f);
-    vec3 r_out_perp = refract_ratio * (ray + cos_theta * normal);
-    vec3 r_out_parallel = normal * (float) (-sqrt(abs(1.0 - dot(r_out_perp, r_out_perp))));
-    return r_out_perp + r_out_parallel;
+    float sin_theta = sqrt(1.0 - cos_theta*cos_theta);
+
+    bool cannot_refract = (refract_ratio * sin_theta) > 1.0f;
+
+    if (!cannot_refract) {
+        vec3 r_out_perp = refract_ratio * (ray + cos_theta * normal);
+        vec3 r_out_parallel = normal * (float) (-sqrt(abs(1.0 - dot(r_out_perp, r_out_perp))));
+        return r_out_perp + r_out_parallel;
+    }
+    else {
+        vec3 reflect_ray = 2 * dot(normalize(ray), -normal) * -normal;
+        return reflect_ray;
+    }
 }
 
 float hit_sphere(vec3 center, double radius, Ray r) {
@@ -212,6 +231,13 @@ vec3 ray_color_plane(Ray &r, int index, int depth) {
             sum_lights += specularK * ray_color(reflect_ray, depth-1, 1, index);
         }
 
+        if (planes_materials[index] == Transparent)
+        {
+            vec3 refract_ray_in = refract(normalize(r.direction()), normal, (1.0f/1.5f));
+            Ray ray = Ray(r.at(t), refract_ray_in);
+            sum_lights += 1.0f * ray_color(ray, depth-1, 2, index);
+        }
+
 
         plane_color = sum_lights;
 
@@ -255,9 +281,17 @@ vec3 ray_color(Ray &r, int depth , int planeOrSphere, int objectIndex) {
         vec3 sphere_center = vec3(spheres[hit.first].x, spheres[hit.first].y, spheres[hit.first].z);
         float t_sphere = hit_sphere(sphere_center, spheres[hit.first].w, r);
         vec3 normal = normalize(r.at(t_sphere) - sphere_center);
-
         vec3 sum_lights = ambient * spheres_colors[hit.first];
+        vec3 coordinate = r.at(t_sphere);
+
         for (int i = 0; i < directional_dirs.size(); i++) {
+            vec3 directional_light_dir = directional_dirs[i] - coordinate ; // spotlight dir
+            Ray ray = Ray(coordinate,  -1.0f * directional_light_dir);
+            std::pair<int, int> sphereHit = minHit(ray, 1, hit.first);
+            if (sphereHit.second == 1) {
+                sum_lights += vec3(0, 0, 0);
+                continue;
+            }
             vec3 light_dir = directional_dirs[i];
             vec3 light_color = directional_intensity[i];
             vec3 R = 1.0f * light_dir - 2 * dot(light_dir, normal) * normal;
@@ -273,6 +307,13 @@ vec3 ray_color(Ray &r, int depth , int planeOrSphere, int objectIndex) {
         }
 
         for (int i = 0; i < spotLights_dirs.size(); i++) {
+            vec3 spotLightDir = spotLights_dirs[i] - coordinate ; // spotlight dir
+            Ray ray = Ray(coordinate,  -1.0f * spotLightDir);
+            std::pair<int, int> sphereHit = minHit(ray, 1, hit.first);
+            if (sphereHit.second == 1) {
+                sum_lights += vec3(0, 0, 0);
+                continue;
+            }
             vec3 light_color = spotLights_intensity[i];
 
             vec3 spot_light_dir = normalize(spotLights_positions[i] - r.at(t_sphere));
@@ -307,9 +348,10 @@ vec3 ray_color(Ray &r, int depth , int planeOrSphere, int objectIndex) {
             float outPoint = hit_sphere(sphere_center, spheres[hit.first].w, ray);
             vec3 newNormal = normalize(sphere_center - ray.at(outPoint));
             vec3 refract_ray_out = refract(normalize(ray.direction()), newNormal, (1.5f/1.0f));
-            Ray refract_ray = Ray(ray.at(outPoint), refract_ray_out);
-//            Ray refract_ray = Ray(r.at(t_sphere + 0.2), r.direction());
-            color = 1.0f * ray_color(refract_ray, depth-1, 1, hit.first);
+            Ray refract_ray;
+//            float angle = acos(dot(normalize(refract_ray_out), normalize(newNormal))) * 180 / M_PI;
+            refract_ray = Ray(ray.at(outPoint), refract_ray_out);
+            color += 1.0f * ray_color(refract_ray, depth-1, 1, hit.first);
         }
 
         if (color.x > 1.0f) {
@@ -339,8 +381,9 @@ unsigned char *part1() {
 //    vec3 center2 = vec3(0.6, -0.5, -1.0); // sphere2 center
 
     float mat[256][256][3];
-    vec3 origin = vec3(0.0, 0.0, 4.0);
-    ambient = vec3(0.1, 0.2, 0.3);
+    vec3 origin = vec3(0.0, 0.0, 3.0);
+    ambient = vec3(0.2, 0.2, 3.0);
+    samples_per_pixel = 10;
 
     vec3 sphere_color = vec3(0, 1, 0);
     vec3 center = vec3(-0.4, 1, -1.0); // sphere center
@@ -348,52 +391,81 @@ unsigned char *part1() {
     spheres_colors.push_back(sphere_color);
     spheres_materials.push_back(Transparent);
 
+//    vec3 sphere_color = vec3(1, 0, 0);
+//    vec3 center = vec3(-1.7, -0.7, -3.0); // sphere center
+//    spheres.push_back(vec4(center.x, center.y, center.z, 0.7));
+//    spheres_colors.push_back(sphere_color);
+//    spheres_materials.push_back(Normal);
+
     vec3 sphere_color_2 = vec3(0.6, 0.0, 0.8);
     vec3 center2 = vec3(0.7, 0, -1.0); // sphere2 center
     spheres.push_back(vec4(center2.x, center2.y, center2.z, 0.5));
     spheres_colors.push_back(sphere_color_2);
     spheres_materials.push_back(Transparent);
 
-    vec3 sphere_color_3 = vec3(0.2, 0.3, 0.4);
-    vec3 center3 = vec3(-0.4, 0, -1.0); // sphere2 center
-    spheres.push_back(vec4(center3.x, center3.y, center3.z, 0.5));
-    spheres_colors.push_back(sphere_color_3);
-    spheres_materials.push_back(Transparent);
+//    vec3 sphere_color_2 = vec3(0.0, 0.0, 0.8);
+//    vec3 center2 = vec3(-0.6, -0.5, -5.0); // sphere2 center
+//    spheres.push_back(vec4(center2.x, center2.y, center2.z, 1.0));
+//    spheres_colors.push_back(sphere_color_2);
+//    spheres_materials.push_back(Normal);
 
-    planes.push_back(vec4(0, -0.5, -1.0, -3.5));
-    vec3 plane_color = vec3(1, 0, 0);
+
+//    vec3 sphere_color_3 = vec3(0.2, 0.3, 0.4);
+//    vec3 center3 = vec3(-0.4, 0, -1.0); // sphere2 center
+//    spheres.push_back(vec4(center3.x, center3.y, center3.z, 0.5));
+//    spheres_colors.push_back(sphere_color_3);
+//    spheres_materials.push_back(Transparent);
+
+    planes.push_back(vec4(0, -1.0, -1.0, -8.5));
+    planes.push_back(vec4(0, -1.0, -1.0, -10.5));
+    vec3 plane_color = vec3(1.0, 1.0, 1.0);
+    vec3 plane_color_2 = vec3(0.7, 0.7, 0);
     planes_colors.push_back(plane_color);
+    planes_colors.push_back(plane_color_2);
     planes_materials.push_back(Normal);
+    planes_materials.push_back(Transparent);
 
-    vec3 spot_light_dir = normalize(vec3(0.5, 0, -1)); // spotlight dir
+//    vec3 spot_light_dir = normalize(vec3(0.5, 0, -1)); // spotlight dir
+//    vec3 spot_light_color = vec3(0.2, 0.5, 0.7); // spotlight
+//    vec3 spot_light_origin = vec3(2.0, 1.0, 3.0); // spotlight
+    vec3 spot_light_dir = normalize(vec3(1.5, 0.9, -1)); // spotlight dir
     vec3 spot_light_color = vec3(0.2, 0.5, 0.7); // spotlight
-    vec3 spot_light_origin = vec3(2.0, 1.0, 3.0); // spotlight
-    vec3 light_dir = normalize(vec3(0.5, -0.5, -1)); // light dir
+    vec3 spot_light_origin = vec3(-2.0, -1.0, 3.0); // spotlight
+//    vec3 light_dir = normalize(vec3(0.5, -0.5, -1)); // light dir
+//    vec3 light_dir = vec3(0, 0.5, -1); // light dir
+    vec3 light_dir_2 = normalize(vec3(0.0, -0.7, -1)); // light dir
 //    vec3 light_dir = normalize(normalize(1.0f * vec3(0, -0.5, -1.0))); // light dir
-    vec3 light_color = vec3(0.7, 0.5, 0.0);
-//    vec3 light_color = vec3(1, 1, 1);
+//    vec3 light_color = vec3(0.7, 0.5, 0.0);
+    vec3 light_color = vec3(0.9, 0.5, 0);
 
-//    spotLights_dirs.push_back(spot_light_dir);
-//    spotLights_intensity.push_back(spot_light_color);
-//    spotLights_positions.push_back(spot_light_origin);
-    directional_dirs.push_back(light_dir);
+    spotLights_dirs.push_back(spot_light_dir);
+    spotLights_intensity.push_back(spot_light_color);
+    spotLights_positions.push_back(spot_light_origin);
+//    directional_dirs.push_back(light_dir);
+    directional_intensity.push_back(light_color);
+
+    directional_dirs.push_back(light_dir_2);
     directional_intensity.push_back(light_color);
 
     for (int y = 0; y < 256; y++) {
         for (int x = 0; x < 256; x++) {
-            double u = double(x) / 255;
-            double v = double(y) / 255;
-            vec3 xDir = vec3(2 * u, 0, 0);
-            vec3 yDir = vec3(0, 2 * v, 0);
-            vec3 left_corner = vec3(-1, -1, 0);
+            vec3 pixelColor = vec3(0,0,0);
+            for (int i = 0; i <samples_per_pixel; i++) {
+                double u = (double(x) + random_double()) / 255;
+                double v = (double(y) + random_double()) / 255;
+                vec3 xDir = vec3(2 * u, 0, 0);
+                vec3 yDir = vec3(0, 2 * v, 0);
+                vec3 left_corner = vec3(-1, -1, 0);
 
-            vec3 dir = left_corner + xDir + yDir - origin;
-            Ray r = Ray(origin, dir);
-            vec3 color = ray_color(r, 2, -1, -1);
+                vec3 dir = left_corner + xDir + yDir - origin;
+                Ray r = Ray(origin, dir);
+                vec3 color = ray_color(r, 2, -1, -1);
+                pixelColor += color;
+            }
 //            vec3 color = ray_color_plane(r);
-            mat[y][x][0] = color[0];
-            mat[y][x][1] = color[1];
-            mat[y][x][2] = color[2];
+            mat[y][x][0] = pixelColor[0] / samples_per_pixel;
+            mat[y][x][1] = pixelColor[1] / samples_per_pixel;
+            mat[y][x][2] = pixelColor[2] / samples_per_pixel;
 
         }
     }
