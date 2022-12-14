@@ -91,11 +91,9 @@ float hit_sphere(vec3 center, double radius, Ray r) {
 float hit_plane(vec4 params, Ray r) {
     float a = params.x, b = params.y, c = params.z, d = params.w;
     vec3 normal = normalize(vec3(a, b, c));
-    vec3 center = vec3(-a * d, -b * d, -c * d);
     float denominator = dot(normal, r.direction());
     if (abs(denominator) > 0.0001) {
-        vec3 diff = center - r.origin();
-        float t = dot(diff, normal) / denominator;
+        float t = -(dot(r.origin(), normal) + d) / denominator;
         if (t > 0.0001) {
             return t;
         }
@@ -166,7 +164,6 @@ vec3 ray_color_plane(Ray& r, int index, int depth) {
 
     float diffuseK = 1;
     float specularK = 0.7;
-    float spot_factor = 1.0;
     float t = hit_plane(plane.params, r);
 
     if (t > 0) {
@@ -200,8 +197,8 @@ vec3 ray_color_plane(Ray& r, int index, int depth) {
         }
         for (int i = 0; i < spotLights.size(); i++) {
             SpotLight light = spotLights[i];
-            vec3 spot_light_dir = coordinate - light.position; // spotlight dir
-            Ray ray = Ray(coordinate, -1.0f * spot_light_dir);
+            vec3 spot_light_dir = normalize(light.position - coordinate); // spotlight dir
+            Ray ray = Ray(coordinate, 1.0f * spot_light_dir);
             std::pair<int, int> hit = minHit(ray, 2, index);
             if (hit.second == 1) {
                 sum_lights += vec3(0, 0, 0);
@@ -214,7 +211,7 @@ vec3 ray_color_plane(Ray& r, int index, int depth) {
             float spotCosine = dot(D, L);
 
             if (spotCosine >= light.angle) {
-                vec3 R = 1.0f * spot_light_dir - 2 * dot(-1.0f * spot_light_dir, normal) * normal;
+                vec3 R = -1.0f * spot_light_dir + 2 * dot(1.0f * spot_light_dir, normal) * normal;
                 float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), plane.shininess);
                 vec3 specular = vec3(0, 0, 0);
                 specular = specularK * p * light.intensity;
@@ -402,9 +399,8 @@ unsigned char* part1() {
     spheres.push_back(Sphere(vec3(1.3, 1.5, -7.0), 1.5, vec3(0.9, 0.0, 0.0), 10, Normal));
     spheres.push_back(Sphere(vec3(-0.6, -0.5, -5.0), 1.0, vec3(0.0, 0.0, 0.8), 10, Normal));
     planes.push_back(Plane(vec4(0, -1, -1, -8.5), vec3(0.7, 0.7, 0.0), 10, Normal));
-    dirLights.push_back(DirLight(vec3(0.0, -0.7, -1.0), vec3(0.9, 0.5, 0.0)));
+//    dirLights.push_back(DirLight(vec3(0.0, -0.7, -1.0), vec3(0.9, 0.5, 0.0)));
     spotLights.push_back(SpotLight(vec3(-2.0, -1.0, 3.0), vec3(1.5, 0.9, -1), vec3(0.2, 0.5, 0.7), 0.6));
-
 
     for (int y = 0; y < 256; y++) {
         for (int x = 0; x < 256; x++) {
