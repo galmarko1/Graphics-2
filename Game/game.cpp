@@ -223,8 +223,8 @@ vec3 ray_color_plane(Ray& r, int index, int depth) {
         }
         if (plane.matType == Reflective) {
             Ray reflect_ray = Ray(r.at(t),
-                normalize(r.direction()) - 2 * dot(normalize(r.direction()), -normal) * -normal);
-            sum_lights += specularK * ray_color(reflect_ray, depth - 1, 1, index);
+                normalize(r.direction()) + 2 * dot(r.direction(), -normal) * normal);
+            sum_lights = specularK * ray_color(reflect_ray, depth - 1, 2, index);
         }
 
         if (plane.matType == Transparent) {
@@ -248,10 +248,11 @@ vec3 ray_color_plane(Ray& r, int index, int depth) {
         return plane_color;
     }
     //background
-    vec3 unit_dir = normalize(r.direction());
-    t = 0.5 * unit_dir[1] + 1.0;
-    float t2 = 1.0 - t;
-    return t2 * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
+    return vec3(0,0,0);
+//    vec3 unit_dir = normalize(r.direction());
+//    t = 0.5 * unit_dir[1] + 1.0;
+//    float t2 = 1.0 - t;
+//    return t2 * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
 }
 
 vec3 ray_color(Ray& r, int depth, int planeOrSphere, int objectIndex) {
@@ -266,11 +267,12 @@ vec3 ray_color(Ray& r, int depth, int planeOrSphere, int objectIndex) {
     std::pair<int, int> hit = minHit(r, planeOrSphere, objectIndex);
 
     if (hit.first == -1) { //background
-        //        return vec3(0, 0, 0);
-        vec3 unit_dir = normalize(r.direction());
-        float t = 0.5 * unit_dir[1] + 1.0;
-        float t2 = 1.0 - t;
-        return t2 * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
+                return vec3(0, 0, 0);
+//        vec3 unit_dir = normalize(r.direction());
+//        float t = 0.5 * unit_dir[1] + 1.0;
+//        float t2 = 1.0 - t;
+//
+//        return t2 * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
     }
     if (hit.second == 1) { //sphere
         Sphere sphere = spheres[hit.first];
@@ -369,8 +371,8 @@ vec3 ray_color(Ray& r, int depth, int planeOrSphere, int objectIndex) {
 unsigned char* part1() {
 
     float mat[256][256][3];
-    vec3 origin = vec3(0.0, 0.0, 3.0);
-    ambient = vec3(0.2, 0.2, 0.3);
+    vec3 origin = vec3(0.0, 0.0, 4.0);
+    ambient = vec3(0.1, 0.2, 0.3);
     samples_per_pixel = 15;
 
     // Scene from PDF
@@ -378,7 +380,7 @@ unsigned char* part1() {
 //    spheres.push_back(Sphere(vec3(0.6, -0.5, -1.0), 0.5, vec3(0.6, 0.0, 0.8), 10, Normal));
 //    planes.push_back(Plane(vec4(0, -0.5, -1.0, -3.5), vec3(0.0, 1.0, 1.0), 10, Normal));
 //    dirLights.push_back(DirLight(vec3(0.0, 0.5, -1.0), vec3(0.7, 0.5, 0.0)));
-//    spotLights.push_back(SpotLight(vec3(2.0, 1.0, 3.0), vec3(0.5, 0.0, -1), vec3(0.2, 0.5, 0.7)));
+//    spotLights.push_back(SpotLight(vec3(2.0, 1.0, 3.0), vec3(0.5, 0.0, -1), vec3(0.2, 0.5, 0.7), 0.6));
 
 
     // Scene 3
@@ -393,14 +395,23 @@ unsigned char* part1() {
 //    spotLights.push_back(SpotLight(vec3(-0.2, 0.0, 0.0), vec3(-0.4, -0.3, -1), vec3(0.3, 0.5, 0.9), 0.7));
 
     // Scene 4
-    spheres.push_back(Sphere(vec3(-0.0, -0.5, -1.0), 0.3, vec3(0, 1, 1), 10, Normal));
-    spheres.push_back(Sphere(vec3(-1.7, -0.7, -3.0), 0.7, vec3(1, 0.0, 0), 20, Normal));
-    spheres.push_back(Sphere(vec3(2.6, -1.5, -10.0), 2.5, vec3(0.6, 0, 0.8), 15, Normal));
-    spheres.push_back(Sphere(vec3(1.3, 1.5, -7.0), 1.5, vec3(0.9, 0.0, 0.0), 10, Normal));
-    spheres.push_back(Sphere(vec3(-0.6, -0.5, -5.0), 1.0, vec3(0.0, 0.0, 0.8), 10, Normal));
-    planes.push_back(Plane(vec4(0, -1, -1, -8.5), vec3(0.7, 0.7, 0.0), 10, Normal));
+//    spheres.push_back(Sphere(vec3(-0.0, -0.5, -1.0), 0.3, vec3(0, 1, 1), 10, Normal));
+//    spheres.push_back(Sphere(vec3(-1.7, -0.7, -3.0), 0.7, vec3(1, 0.0, 0), 20, Normal));
+//    spheres.push_back(Sphere(vec3(2.6, -1.5, -10.0), 2.5, vec3(0.6, 0, 0.8), 15, Normal));
+//    spheres.push_back(Sphere(vec3(1.3, 1.5, -7.0), 1.5, vec3(0.9, 0.0, 0.0), 10, Normal));
+//    spheres.push_back(Sphere(vec3(-0.6, -0.5, -5.0), 1.0, vec3(0.0, 0.0, 0.8), 10, Normal));
+//    planes.push_back(Plane(vec4(0, -1, -1, -8.5), vec3(0.7, 0.7, 0.0), 10, Normal));
 //    dirLights.push_back(DirLight(vec3(0.0, -0.7, -1.0), vec3(0.9, 0.5, 0.0)));
-    spotLights.push_back(SpotLight(vec3(-2.0, -1.0, 3.0), vec3(1.5, 0.9, -1), vec3(0.2, 0.5, 0.7), 0.6));
+//    spotLights.push_back(SpotLight(vec3(-2.0, -1.0, 3.0), vec3(1.5, 0.9, -1), vec3(0.2, 0.5, 0.7), 0.6));
+
+    // Scene 5
+    spheres.push_back(Sphere(vec3(0.6, 0.5, -1.0), 0.5, vec3(0.6, 0, 0.8), 10, Normal));
+    spheres.push_back(Sphere(vec3(-0.7, 0.7, -2.0), 0.5, vec3(1, 0.0, 0), 10, Normal));;
+    planes.push_back(Plane(vec4(0, -0.5, -1, -3.5), vec3(0.0, 1.0, 1.0), 10, Reflective));
+    dirLights.push_back(DirLight(vec3(0.0, 0.5, -1.0), vec3(0.7, 0.5, 0.0)));
+    spotLights.push_back(SpotLight(vec3(2.0, 1.0, 3.0), vec3(0.5, 0.0, -1), vec3(0.2, 0.5, 0.7), 0.6));
+
+//Scene 5
 
     for (int y = 0; y < 256; y++) {
         for (int x = 0; x < 256; x++) {
@@ -414,7 +425,7 @@ unsigned char* part1() {
 
                 vec3 dir = left_corner + xDir + yDir - origin;
                 Ray r = Ray(origin, dir);
-                vec3 color = ray_color(r, 2, -1, -1);
+                vec3 color = ray_color(r, 5, -1, -1);
                 pixelColor += color;
             }
             //            vec3 color = ray_color_plane(r);
