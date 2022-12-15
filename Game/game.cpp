@@ -7,6 +7,15 @@
 
 using namespace glm;
 
+struct Hit
+{
+    float t = -1;
+    vec3 pos;
+    vec3 normal;
+    int id = -1;
+    int shape_type = -1; // 1 = sphere, 2 = plane
+};
+
 std::vector<Sphere> spheres;
 std::vector<Plane> planes;
 std::vector<DirLight> dirLights;
@@ -16,14 +25,7 @@ glm::vec3 ambient;
 
 int samples_per_pixel;
 
-static void printMat(const glm::mat4 mat) {
-    std::cout << " matrix:" << std::endl;
-    for (int i = 0; i < 4; i++) {
-        for (int j = 0; j < 4; j++)
-            std::cout << mat[j][i] << " ";
-        std::cout << std::endl;
-    }
-}
+#define EPSILON 0.01f
 
 Game::Game() : Scene() {
 
@@ -38,7 +40,7 @@ inline double random_double() {
     return distribution(generator);
 }
 
-vec3 ray_color(Ray& r, int depth, int planeOrSphere, int objectIndex);// forward deceleration
+vec3 ray_color(Ray& r, int depth);// forward deceleration
 
 vec3 refract(vec3 ray, vec3 normal, float refract_ratio) {
     //    float cos_theta = min(dot(-ray, normal), 1.0f);
@@ -63,7 +65,7 @@ vec3 refract(vec3 ray, vec3 normal, float refract_ratio) {
     else {
         vec3 reflect_ray = 2 * dot(normalize(ray), -normal) * -normal;
         return
-            reflect_ray;
+                reflect_ray;
     }
 }
 
@@ -101,271 +103,143 @@ float hit_plane(vec4 params, Ray r) {
     return -1;
 }
 
-std::pair<int, int> minHit(Ray& r, int planeOrSphere, int objectIndex) {
-    float min_t_sphere = 100000;
-    float min_t_plane = 100000;
-    int min_sphere_index = -1;
-    int min_plane_index = -1;
-    int i = 0;
+Hit minHit(Ray& r, float minT, float maxT)
+{
+    Hit hit;
+    hit.t = maxT;
 
-    for (Sphere sphere : spheres) {
-        if (planeOrSphere == 1) {
-            if (objectIndex == i) {
-                i++;
-                continue;
-            }
+    for (int i = 0; i < spheres.size(); i++)
+    {
+        float t = hit_sphere(spheres[i].center, spheres[i].radius, r);
+
+        if (t > minT && t < hit.t)
+        {
+            hit.t = t;
+            hit.pos = r.at(hit.t);
+            hit.id = i;
+            hit.normal = normalize(hit.pos - spheres[hit.id].center);
+            hit.shape_type = 1;
         }
-        float curr_t = hit_sphere(sphere.center, sphere.radius, r);
-        if (curr_t > -1) {
-            if (min_t_sphere > curr_t) {
-                min_sphere_index = i;
-                min_t_sphere = curr_t;
-            }
-        }
-        i++;
     }
 
-    i = 0;
-    for (Plane plane : planes) {
-        if (planeOrSphere == 2) {
-            if (objectIndex == i) {
-                i++;
-                continue;
-            }
+    for (int i = 0; i < planes.size(); i++)
+    {
+        float t = hit_plane(planes[i].params, r);
+
+        if (t > minT && t < hit.t)
+        {
+            hit.t = t;
+            hit.pos = r.at(hit.t);
+            hit.id = i;
+            hit.normal = -1.0f * normalize(vec3(planes[i].params.x, planes[i].params.y, planes[i].params.z));
+            hit.shape_type = 2;
         }
-        float curr_t = hit_plane(plane.params, r);
-        if (curr_t > -1) {
-            if (min_t_plane > curr_t) {
-                min_plane_index = i;
-                min_t_plane = curr_t;
-            }
-        }
-        i++;
     }
-    std::pair<int, int> p;
-    if (min_plane_index == -1 && min_sphere_index == -1) {
-        p.first = -1;
-        p.second = 0;
-    }
-    else if (min_t_plane < min_t_sphere) {
-        p.first = min_plane_index;
-        p.second = 2; // plane vector
-    }
-    else {
-        p.first = min_sphere_index;
-        p.second = 1; // sphere vector
-    }
-    return p;
+
+    return hit;
 }
 
-vec3 ray_color_plane(Ray& r, int index, int depth) {
-    Plane plane = planes[index];
-    vec3 plane_color = plane.color;
-
-    float diffuseK = 1;
-    float specularK = 0.7;
-    float t = hit_plane(plane.params, r);
-
-    if (t > 0) {
-        vec3 normal = -1.0f * normalize(vec3(plane.params.x, plane.params.y, plane.params.z));
-        vec3 sum_lights = ambient * plane.color;
-        vec3 diffuse_and_specular = vec3(0, 0, 0);
-        vec3 coordinate = r.at(t);
-
-        float chess = floor(coordinate.x) + floor(coordinate.y);
-        chess = 2 * ((chess * 0.5) - int(chess * 0.5));
-        diffuseK = chess == 0 ? 1 : 0.5;
-
-        for (int i = 0; i < dirLights.size(); i++) {
-            DirLight light = dirLights[i];
-            Ray ray = Ray(coordinate, -1.0f * light.direction);
-            std::pair<int, int> hit = minHit(ray, 2, index);
-            if (hit.second == 1) {
-                sum_lights += vec3(0, 0, 0);
-                continue;
-            }
-            
-            vec3 R = light.direction - 2 * dot(-light.direction, normal) * normal;
-            float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), plane.shininess);
-            vec3 specular = vec3(0, 0, 0);
-            specular = specularK * p * light.intensity;
-            vec3 diffuse =
-                (float)std::max((double)dot(normalize(-light.direction), normal), 0.0) * plane.color * light.intensity *
-                diffuseK;
-            diffuse_and_specular += diffuse + specular;
-            sum_lights += diffuse_and_specular;
-        }
-        for (int i = 0; i < spotLights.size(); i++) {
-            SpotLight light = spotLights[i];
-            vec3 spot_light_dir = normalize(light.position - coordinate); // spotlight dir
-            Ray ray = Ray(coordinate, 1.0f * spot_light_dir);
-            std::pair<int, int> hit = minHit(ray, 2, index);
-            if (hit.second == 1) {
-                sum_lights += vec3(0, 0, 0);
-                continue;
-            }
-            
-            vec3 L = normalize(light.direction);
-
-            vec3 D = normalize(r.at(t) - light.position);
-            float spotCosine = dot(D, L);
-
-            if (spotCosine >= light.angle) {
-                vec3 R = -1.0f * spot_light_dir + 2 * dot(1.0f * spot_light_dir, normal) * normal;
-                float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), plane.shininess);
-                vec3 specular = vec3(0, 0, 0);
-                specular = specularK * p * light.intensity;
-                vec3 diffuse = light.intensity * plane.color *
-                    (float)std::max((double)dot(normalize(1.0f * spot_light_dir), normal), 0.0) *
-                    diffuseK;
-                sum_lights += specular + diffuse;
-            }
-        }
-        if (plane.matType == Reflective) {
-            Ray reflect_ray = Ray(r.at(t),
-                normalize(r.direction()) + 2 * dot(r.direction(), -normal) * normal);
-            sum_lights = specularK * ray_color(reflect_ray, depth - 1, 2, index);
-        }
-
-        if (plane.matType == Transparent) {
-            vec3 refract_ray_in = refract(normalize(r.direction()), normal, (1.0f / 1.5f));
-            Ray ray = Ray(r.at(t), refract_ray_in);
-            sum_lights += 1.0f * ray_color(ray, depth - 1, 2, index);
-        }
-
-
-        plane_color = sum_lights;
-
-        if (plane_color.x > 1.0f) {
-            plane_color = vec3(1.0, plane_color.y, plane_color.z);
-        }
-        if (plane_color.y > 1.0f) {
-            plane_color = vec3(plane_color.x, 1.0, plane_color.z);
-        }
-        if (plane_color.z > 1.0f) {
-            plane_color = vec3(plane_color.x, plane_color.y, 1.0f);
-        }
-        return plane_color;
-    }
-    //background
-    return vec3(0,0,0);
-//    vec3 unit_dir = normalize(r.direction());
-//    t = 0.5 * unit_dir[1] + 1.0;
-//    float t2 = 1.0 - t;
-//    return t2 * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
-}
-
-vec3 ray_color(Ray& r, int depth, int planeOrSphere, int objectIndex) {
-
+vec3 ray_color(Ray& r, int depth)
+{
     // maximum recursion
     if (depth == 0) {
         return vec3(0, 0, 0);
     }
 
+    Hit hit = minHit(r, 0, 10000);
+
+    if (hit.id == -1) { //background
+        return vec3(0, 0, 0);
+    }
+
     float diffuseK = 1;
     float specularK = 0.7;
-    std::pair<int, int> hit = minHit(r, planeOrSphere, objectIndex);
 
-    if (hit.first == -1) { //background
-                return vec3(0, 0, 0);
-//        vec3 unit_dir = normalize(r.direction());
-//        float t = 0.5 * unit_dir[1] + 1.0;
-//        float t2 = 1.0 - t;
-//
-//        return t2 * vec3(1.0, 1.0, 1.0) + t * vec3(0.5, 0.7, 1.0);
+    vec3 color = hit.shape_type == 1 ? spheres[hit.id].color : planes[hit.id].color;
+    float shininess = hit.shape_type == 1 ? spheres[hit.id].shininess : planes[hit.id].shininess;
+    MaterialType matType = hit.shape_type == 1 ? spheres[hit.id].matType : planes[hit.id].matType;
+
+    if (hit.shape_type == 2) // plane checkboard
+    {
+        float chess = floor(hit.pos.x) + floor(hit.pos.y);
+        chess = 2 * ((chess * 0.5) - int(chess * 0.5));
+        diffuseK = chess == 0 ? 1 : 0.5;
     }
-    if (hit.second == 1) { //sphere
-        Sphere sphere = spheres[hit.first];
-        float t_sphere = hit_sphere(sphere.center, sphere.radius, r);
-        vec3 normal = normalize(r.at(t_sphere) - sphere.center);
-        vec3 sum_lights = ambient * sphere.color;
-        vec3 coordinate = r.at(t_sphere);
 
-        for (int i = 0; i < dirLights.size(); i++) {
-            DirLight light = dirLights[i];
-            Ray ray = Ray(coordinate, -1.0f * light.direction);
-            std::pair<int, int> sphereHit = minHit(ray, 1, hit.first);
-            if (sphereHit.second == 1) {
-                sum_lights += vec3(0, 0, 0);
-                continue;
-            }
-            vec3 R = 1.0f * light.direction - 2 * dot(light.direction, normal) * normal;
-            float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), sphere.shininess);
+    vec3 sum_lights = ambient * color;
 
-            vec3 specular = vec3(1, 1, 1);
-            specular = specularK * p * light.intensity;
-            vec3 diffuse =
-                (float)std::max((double)dot(normalize(-light.direction), normal), 0.0) * sphere.color * light.intensity *
-                diffuseK;
+    for (int i = 0; i < dirLights.size(); i++) {
+        DirLight light = dirLights[i];
+        vec3 lightDir = -normalize(light.direction);
+
+        Ray rayToLight = Ray(hit.pos + hit.normal*EPSILON, lightDir);
+        Hit rayToLightHit = minHit(rayToLight, EPSILON, 10000);
+
+        if (rayToLightHit.id != -1 && rayToLightHit.shape_type == 1) // shadow from sphere
+        {
+            continue;
+        }
+
+        vec3 diffuse = (float)std::max((double)dot(lightDir, hit.normal), 0.0) * color * light.intensity * diffuseK;
+        vec3 R = normalize( - lightDir + 2 * dot(lightDir, hit.normal) * hit.normal );
+        float p = pow(max(dot(-r.direction(), R), 0.0f), shininess);
+        vec3 specular = specularK * p * light.intensity;
+
+        sum_lights += (diffuse + specular);
+    }
+
+    for (int i = 0; i < spotLights.size(); i++) {
+        SpotLight light = spotLights[i];
+        vec3 lightDir = normalize(light.position - hit.pos);
+        vec3 spotlightDir = normalize(light.direction);
+
+        Ray rayToLight = Ray(hit.pos + hit.normal * EPSILON, lightDir);
+        Hit rayToLightHit = minHit(rayToLight, EPSILON, length(light.position - hit.pos));
+
+        if (rayToLightHit.id != -1 && rayToLightHit.shape_type == 1) // shadow from sphere
+        {
+            continue;
+        }
+
+        float spotCosine = dot(spotlightDir, -lightDir);
+
+        if (spotCosine >= light.angle)
+        {
+            vec3 diffuse = (float)std::max((double)dot(lightDir, hit.normal), 0.0) * color * light.intensity * diffuseK;
+            vec3 R = normalize(-lightDir + 2 * dot(lightDir, hit.normal) * hit.normal);
+            float p = pow(max(dot(-r.direction(), R), 0.0f), shininess);
+            vec3 specular = specularK * p * light.intensity;
+
             sum_lights += (diffuse + specular);
         }
-
-        for (int i = 0; i < spotLights.size(); i++) {
-            SpotLight light = spotLights[i];
-
-            vec3 spotLightDir = coordinate - light.position; // spotlight dir
-            Ray ray = Ray(coordinate, -1.0f * spotLightDir);
-            std::pair<int, int> sphereHit = minHit(ray, 1, hit.first);
-            if (sphereHit.second == 1) {
-                sum_lights += vec3(0,0,0);
-                continue;
-            }
-
-            vec3 spot_light_dir = normalize(light.position - coordinate);
-            vec3 L = normalize(light.direction);
-            float spotCosine = -1.0f * dot(L, spot_light_dir);
-
-            if (spotCosine >= light.angle) {
-                vec3 normal = normalize(coordinate - sphere.center);
-                float diff = (dot(normal, spot_light_dir));
-                vec3 diffuse = light.intensity * diff * diffuseK * sphere.color;
-                sum_lights += diffuse;
-
-                vec3 R = -1.0f * spot_light_dir - 2 * dot(-1.0f * spot_light_dir, normal) * normal;
-                float p = pow(max(dot(normalize(-1.0f * r.direction()), normalize(R)), 0.0f), sphere.shininess);
-
-                vec3 specular = vec3(1, 1, 1);
-                specular = specularK * p * light.intensity;
-                sum_lights += specular;
-            }
-        }
-        vec3 color = sum_lights;
-        if (sphere.matType == Reflective) {
-            Ray reflect_ray = Ray(r.at(t_sphere),
-                normalize(r.direction()) - 2 * dot(normalize(r.direction()), normal) * normal);
-            color += specularK * ray_color(reflect_ray, depth - 1, 1, hit.first);
-        }
-
-        if (sphere.matType == Transparent) {
-            vec3 refract_ray_in = refract(normalize(r.direction()), normal, (1.0f / 1.5f));
-            Ray ray = Ray(r.at(t_sphere), refract_ray_in);
-            float outPoint = hit_sphere(sphere.center, sphere.radius, ray);
-            vec3 newNormal = normalize(sphere.center - ray.at(outPoint));
-            vec3 refract_ray_out = refract(normalize(ray.direction()), newNormal, (1.5f / 1.0f));
-            Ray refract_ray;
-            refract_ray = Ray(ray.at(outPoint), refract_ray_out);
-            color += 1.0f * ray_color(refract_ray, depth - 1, 1, hit.first);
-        }
-
-        if (color.x > 1.0f) {
-            color = vec3(1.0, color.y, color.z);
-        }
-        if (color.y > 1.0f) {
-            color = vec3(color.x, 1.0, color.z);
-        }
-        if (color.z > 1.0f) {
-            color = vec3(color.x, color.y, 1.0f);
-        }
-
-
-        return color;
-
-
     }
-    else { //plane
-        //        return vec3(0,0,0);
-        return ray_color_plane(r, hit.first, depth);
+
+    if (matType == Reflective) {
+        Ray reflect_ray = Ray(hit.pos + hit.normal * EPSILON,
+                              r.direction() + 2 * dot(-r.direction(), hit.normal) * hit.normal);
+        sum_lights = ray_color(reflect_ray, depth - 1); // multiply with specularK 0.7 like in class? not the same as images
     }
+
+    if (matType == Transparent) {
+        vec3 refract_ray_in = refract(normalize(r.direction()), hit.normal, (1.0f / 1.5f));
+        Ray ray = Ray(hit.pos, refract_ray_in);
+        float outPoint;
+        vec3 newNormal;
+        if(hit.shape_type == 1){ //sphere
+            outPoint = hit_sphere(spheres[hit.id].center, spheres[hit.id].radius, ray);
+            newNormal = normalize(spheres[hit.id].center - ray.at(outPoint));
+        }
+        if(hit.shape_type == 2){//plane
+            outPoint = hit.t;
+            newNormal = hit.normal;
+        }
+        vec3 refract_ray_out = refract(normalize(ray.direction()), newNormal, (1.5f / 1.0f));
+        Ray refract_ray;
+        refract_ray = Ray(ray.at(outPoint), refract_ray_out);
+        sum_lights += 1.0f * ray_color(refract_ray, depth - 1);
+    }
+
+    return sum_lights;
 }
 
 unsigned char* part1() {
@@ -373,45 +247,75 @@ unsigned char* part1() {
     float mat[256][256][3];
     vec3 origin = vec3(0.0, 0.0, 4.0);
     ambient = vec3(0.1, 0.2, 0.3);
-    samples_per_pixel = 15;
+    samples_per_pixel = 16;
 
     // Scene from PDF
-//    spheres.push_back(Sphere(vec3(-0.7, -0.7, -2.0), 0.5, vec3(1, 0, 0), 10, Normal));
-//    spheres.push_back(Sphere(vec3(0.6, -0.5, -1.0), 0.5, vec3(0.6, 0.0, 0.8), 10, Normal));
-//    planes.push_back(Plane(vec4(0, -0.5, -1.0, -3.5), vec3(0.0, 1.0, 1.0), 10, Normal));
-//    dirLights.push_back(DirLight(vec3(0.0, 0.5, -1.0), vec3(0.7, 0.5, 0.0)));
-//    spotLights.push_back(SpotLight(vec3(2.0, 1.0, 3.0), vec3(0.5, 0.0, -1), vec3(0.2, 0.5, 0.7), 0.6));
+    /*spheres.push_back(Sphere(vec3(-0.7, -0.7, -2.0), 0.5, vec3(1, 0, 0), 10, Normal));
+    spheres.push_back(Sphere(vec3(0.6, -0.5, -1.0), 0.5, vec3(0.6, 0.0, 0.8), 10, Normal));
+    planes.push_back(Plane(vec4(0, -0.5, -1.0, -3.5), vec3(0.0, 1.0, 1.0), 10, Normal));
+    dirLights.push_back(DirLight(vec3(0.0, 0.5, -1.0), vec3(0.7, 0.5, 0.0)));
+    spotLights.push_back(SpotLight(vec3(2.0, 1.0, 3.0), vec3(0.5, 0.0, -1), vec3(0.2, 0.5, 0.7), 0.6));*/
 
-
-    // Scene 3
-
-//    planes.push_back(Plane(vec4(1, 0, -0.1, -3.0), vec3(0.6, 0.0, 0.8), 20, Normal));
-//    planes.push_back(Plane(vec4(0, 0, -1.0, -3.5), vec3(0.7, 0.7, 0), 10, Normal));
-//    planes.push_back(Plane(vec4(-1, 0, -0.1, -3.0), vec3(0.0, 0.9, 0.5), 15, Normal));
-//    planes.push_back(Plane(vec4(0, 1, -0.1, -3.0), vec3(0.0, 0.8, 0.8), 10, Normal));
-//    planes.push_back(Plane(vec4(0, -1, -0.1, -3.0), vec3(0.9, 0.0, 0.1), 15, Normal));
-//    spotLights.push_back(SpotLight(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.5, -1), vec3(0.3, 0.9, 0.2), 0.8));
-//    spotLights.push_back(SpotLight(vec3(0.0, 0.0, 0.0), vec3(0.5, 0.0, -1), vec3(0.9, 0.5, 0.5), 0.9));
-//    spotLights.push_back(SpotLight(vec3(-0.2, 0.0, 0.0), vec3(-0.4, -0.3, -1), vec3(0.3, 0.5, 0.9), 0.7));
-
-    // Scene 4
-//    spheres.push_back(Sphere(vec3(-0.0, -0.5, -1.0), 0.3, vec3(0, 1, 1), 10, Normal));
-//    spheres.push_back(Sphere(vec3(-1.7, -0.7, -3.0), 0.7, vec3(1, 0.0, 0), 20, Normal));
-//    spheres.push_back(Sphere(vec3(2.6, -1.5, -10.0), 2.5, vec3(0.6, 0, 0.8), 15, Normal));
-//    spheres.push_back(Sphere(vec3(1.3, 1.5, -7.0), 1.5, vec3(0.9, 0.0, 0.0), 10, Normal));
-//    spheres.push_back(Sphere(vec3(-0.6, -0.5, -5.0), 1.0, vec3(0.0, 0.0, 0.8), 10, Normal));
-//    planes.push_back(Plane(vec4(0, -1, -1, -8.5), vec3(0.7, 0.7, 0.0), 10, Normal));
-//    dirLights.push_back(DirLight(vec3(0.0, -0.7, -1.0), vec3(0.9, 0.5, 0.0)));
-//    spotLights.push_back(SpotLight(vec3(-2.0, -1.0, 3.0), vec3(1.5, 0.9, -1), vec3(0.2, 0.5, 0.7), 0.6));
-
-    // Scene 5
-    spheres.push_back(Sphere(vec3(0.6, 0.5, -1.0), 0.5, vec3(0.6, 0, 0.8), 10, Normal));
-    spheres.push_back(Sphere(vec3(-0.7, 0.7, -2.0), 0.5, vec3(1, 0.0, 0), 10, Normal));;
-    planes.push_back(Plane(vec4(0, -0.5, -1, -3.5), vec3(0.0, 1.0, 1.0), 10, Reflective));
+    // Scene from PDF
+    spheres.push_back(Sphere(vec3(-0.7, -0.7, -2.0), 0.5, vec3(1, 0, 0), 10, Transparent));
+    spheres.push_back(Sphere(vec3(0.6, -0.5, -1.0), 0.5, vec3(0.6, 0.0, 0.8), 10, Transparent));
+    planes.push_back(Plane(vec4(0, -0.5, -1.0, -3.5), vec3(0.0, 1.0, 1.0), 10, Normal));
     dirLights.push_back(DirLight(vec3(0.0, 0.5, -1.0), vec3(0.7, 0.5, 0.0)));
     spotLights.push_back(SpotLight(vec3(2.0, 1.0, 3.0), vec3(0.5, 0.0, -1), vec3(0.2, 0.5, 0.7), 0.6));
 
-//Scene 5
+
+
+    // Scene 1
+//    planes.push_back(Plane(vec4(1, 0, -0.1, -3.0), vec3(0.6, 0.0, 0.8), 20, Reflective));
+//    planes.push_back(Plane(vec4(0, 0, -1.0, -3.5), vec3(0.7, 0.7, 0), 10, Reflective)); // floor
+//    planes.push_back(Plane(vec4(-1, 0, -0.1, -3.0), vec3(0.0, 0.9, 0.5), 15, Reflective));
+//    planes.push_back(Plane(vec4(0, 1, -0.1, -3.0), vec3(0.0, 0.8, 0.8), 10, Reflective));
+//    planes.push_back(Plane(vec4(0, -1, -0.1, -3.0), vec3(0.9, 0.0, 0.1), 15, Reflective));
+//    spheres.push_back(Sphere(vec3(-0.7, 0.7, -2.0), 1, vec3(1, 0, 0), 15, Normal));
+//    spheres.push_back(Sphere(vec3(0.8, -0.5, -1.0), 0.7, vec3(0.0, 1.0, 0.8), 10, Normal));
+//    spotLights.push_back(SpotLight(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.5, -1), vec3(0.3, 0.9, 0.2), 0.8));
+//    spotLights.push_back(SpotLight(vec3(0.0, 0.0, 0.0), vec3(0.5, 0.0, -1), vec3(0.8, 0.5, 0.7), 0.9));
+//    spotLights.push_back(SpotLight(vec3(-0.2, 0.0, 0.0), vec3(-0.4, -0.3, -1), vec3(0.8, 0.5, 0.7), 0.7));
+//    dirLights.push_back(DirLight(vec3(0.3, 0.5, -1.0), vec3(0.7, 0.8, 0.3)));
+
+    // Scene 3
+
+    //planes.push_back(Plane(vec4(1, 0, -0.1, -3.0), vec3(0.6, 0.0, 0.8), 20, Normal));
+    //planes.push_back(Plane(vec4(0, 0, -1.0, -3.5), vec3(0.7, 0.7, 0), 10, Normal));
+    //planes.push_back(Plane(vec4(-1, 0, -0.1, -3.0), vec3(0.0, 0.9, 0.5), 15, Normal));
+    //planes.push_back(Plane(vec4(0, 1, -0.1, -3.0), vec3(0.0, 0.8, 0.8), 10, Normal));
+    //planes.push_back(Plane(vec4(0, -1, -0.1, -3.0), vec3(0.9, 0.0, 0.1), 15, Normal));
+    //
+    ////spotLights.push_back(SpotLight(vec3(0, 0, 4), vec3(0, 0, -1), vec3(1, 1, 1), 0.98));
+    //
+    //spotLights.push_back(SpotLight(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.5, -1), vec3(0.3, 0.9, 0.2), 0.8));
+    //spotLights.push_back(SpotLight(vec3(0.0, 0.0, 0.0), vec3(0.5, 0.0, -1), vec3(0.9, 0.5, 0.5), 0.9));
+    //spotLights.push_back(SpotLight(vec3(-0.2, 0.0, 0.0), vec3(-0.4, -0.3, -1), vec3(0.3, 0.5, 0.9), 0.7));
+    //
+
+    // Scene 4
+    /*spheres.push_back(Sphere(vec3(-0.0, -0.5, -1.0), 0.3, vec3(0, 1, 1), 10, Normal));
+    spheres.push_back(Sphere(vec3(-1.7, -0.7, -3.0), 0.7, vec3(1, 0.0, 0), 20, Normal));
+    spheres.push_back(Sphere(vec3(2.6, -1.5, -10.0), 2.5, vec3(0.6, 0, 0.8), 15, Normal));
+    spheres.push_back(Sphere(vec3(1.3, 1.5, -7.0), 1.5, vec3(0.9, 0.0, 0.0), 10, Normal));
+    spheres.push_back(Sphere(vec3(-0.6, -0.5, -5.0), 1.0, vec3(0.0, 0.0, 0.8), 10, Normal));
+    planes.push_back(Plane(vec4(0, -1, -1, -8.5), vec3(0.7, 0.7, 0.0), 10, Normal));
+    dirLights.push_back(DirLight(vec3(0.0, -0.7, -1.0), vec3(0.9, 0.5, 0.0)));
+    spotLights.push_back(SpotLight(vec3(-2.0, -1.0, 3.0), vec3(1.5, 0.9, -1), vec3(0.2, 0.5, 0.7), 0.6));*/
+
+    // Scene 5
+//    spheres.push_back(Sphere(vec3(0.6, 0.5, -1.0), 0.5, vec3(0.6, 0, 0.8), 10, Normal));
+//    spheres.push_back(Sphere(vec3(-0.7, 0.7, -2.0), 0.5, vec3(1, 0.0, 0), 10, Normal));;
+//    planes.push_back(Plane(vec4(0, -0.5, -1, -3.5), vec3(0.0, 1.0, 1.0), 10, Reflective));
+//    dirLights.push_back(DirLight(vec3(0.0, 0.5, -1.0), vec3(0.7, 0.5, 0.0)));
+//    spotLights.push_back(SpotLight(vec3(2.0, 1.0, 3.0), vec3(0.5, 0.0, -1), vec3(0.2, 0.5, 0.7), 0.6));
+
+    //Scene Google reflect
+
+    //spheres.push_back(Sphere(vec3(0, 0, -3.0), 0.5, vec3(0, 0, 1.0), 10, Normal));
+    //planes.push_back(Plane(vec4(0, 0, -1, -5), vec3(0, 1.0, 0), 10, Normal));
+    //dirLights.push_back(DirLight(vec3(0.5, 0, -1), vec3(1.0, 1.0, 1.0)));
+    //spotLights.push_back(SpotLight(vec3(0, 0, 0), vec3(0, 0, -1), vec3(1, 1, 1), 0.7));
 
     for (int y = 0; y < 256; y++) {
         for (int x = 0; x < 256; x++) {
@@ -425,13 +329,15 @@ unsigned char* part1() {
 
                 vec3 dir = left_corner + xDir + yDir - origin;
                 Ray r = Ray(origin, dir);
-                vec3 color = ray_color(r, 5, -1, -1);
+                vec3 color = ray_color(r, 4);
                 pixelColor += color;
             }
-            //            vec3 color = ray_color_plane(r);
-            mat[y][x][0] = pixelColor[0] / samples_per_pixel;
-            mat[y][x][1] = pixelColor[1] / samples_per_pixel;
-            mat[y][x][2] = pixelColor[2] / samples_per_pixel;
+
+            vec3 avgPixelColor = clamp((1.0f/samples_per_pixel) * pixelColor, 0.0f, 1.0f);
+
+            mat[y][x][0] = avgPixelColor[0];
+            mat[y][x][1] = avgPixelColor[1];
+            mat[y][x][2] = avgPixelColor[2];
 
         }
     }
@@ -460,8 +366,8 @@ void Game::Init() {
 
     //	AddTexture("../res/textures/box0.bmp",false);
 
-    unsigned char* zibi = part1();
-    AddTexture(256, 256, zibi);
+    unsigned char* rayTraceTexture = part1();
+    AddTexture(256, 256, rayTraceTexture);
 
     AddShape(Plane, -1, TRIANGLES);
 
